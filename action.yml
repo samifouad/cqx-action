@@ -137,7 +137,6 @@ runs:
         if [ -n "$IN_CONFIG" ]; then args+=( --config "$IN_CONFIG" ); fi
         if [ "$IN_SARIF" = 'true' ]; then
           args+=( --sarif "${out}/cqx.sarif" )
-          echo "sarif=${out}/cqx.sarif" >> "$GITHUB_OUTPUT"
         fi
         if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
           args+=( --summary "$GITHUB_STEP_SUMMARY" )
@@ -153,6 +152,12 @@ runs:
         cqx scan "${args[@]}"
         code=$?
         set -e
+
+        # Announced only once it exists. The upload step keys off this, and a
+        # path that was merely asked for is not a file.
+        if [ -f "${out}/cqx.sarif" ]; then
+          echo "sarif=${out}/cqx.sarif" >> "$GITHUB_OUTPUT"
+        fi
 
         scores=$(python3 -c "import json,sys;print(json.dumps(json.load(open('${out}/report.json'))['scores']))" 2>/dev/null || echo '{}')
         echo "scores=${scores}" >> "$GITHUB_OUTPUT"
@@ -170,11 +175,14 @@ runs:
         echo "exit=${code}" >> "$GITHUB_OUTPUT"
 
     - name: Put the findings on their lines
-      if: inputs.sarif == 'true' && inputs.upload-sarif == 'true' && hashFiles(format('{0}/cqx-out/cqx.sarif', runner.temp)) != ''
+      # `hashFiles` only sees the workspace, so it cannot answer for a file
+      # under RUNNER_TEMP — it returned empty, and this step silently skipped
+      # on the first real run. The step that wrote the file says so instead.
+      if: inputs.upload-sarif == 'true' && steps.scan.outputs.sarif != ''
       uses: github/codeql-action/upload-sarif@v3
       continue-on-error: true
       with:
-        sarif_file: ${{ runner.temp }}/cqx-out/cqx.sarif
+        sarif_file: ${{ steps.scan.outputs.sarif }}
         category: cqx
 
     - name: Decide
