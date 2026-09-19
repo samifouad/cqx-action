@@ -1,0 +1,195 @@
+name: cqx
+description: Score a repository, and refuse a change that makes it worse.
+author: Sami Fouad
+
+branding:
+  icon: activity
+  color: orange
+
+# A composite action rather than a JavaScript one, deliberately. The work is
+# done by a single static binary; wrapping it in node would add a runtime to
+# every job that does not otherwise need one, and a build step to this
+# repository that nobody would remember to run.
+
+inputs:
+  version:
+    description: 'Which cqx to run, e.g. v0.1.17. Defaults to the latest release.'
+    required: false
+    default: ''
+  path:
+    description: 'The tree to score.'
+    required: false
+    default: '.'
+  against:
+    description: >
+      A git ref to compare against. On a pull request this defaults to the
+      commit the branch is based on, which is what makes the check a ratchet:
+      a score on its own says little, and the direction says everything.
+      Set to `none` to score without comparing.
+    required: false
+    default: ''
+  min-score:
+    description: 'Fail when any category falls below this. A floor, on top of the ratchet.'
+    required: false
+    default: ''
+  config:
+    description: 'A cqx.json to score against. Otherwise one is searched for upward.'
+    required: false
+    default: ''
+  sarif:
+    description: 'Write findings as SARIF.'
+    required: false
+    default: 'true'
+  upload-sarif:
+    description: >
+      Upload the SARIF to code scanning, which puts each finding on its own
+      line in the Files changed tab. Needs `security-events: write`.
+    required: false
+    default: 'true'
+  summary:
+    description: 'Write the scores to the job summary.'
+    required: false
+    default: 'true'
+  fail:
+    description: 'Fail the job when the gate refuses. Set false to report only.'
+    required: false
+    default: 'true'
+
+outputs:
+  scores:
+    description: 'The category scores, as JSON.'
+    value: ${{ steps.scan.outputs.scores }}
+  passed:
+    description: 'true when nothing refused the change.'
+    value: ${{ steps.scan.outputs.passed }}
+  report:
+    description: 'Path to the whole report as JSON.'
+    value: ${{ steps.scan.outputs.report }}
+  sarif:
+    description: 'Path to the SARIF file, when one was written.'
+    value: ${{ steps.scan.outputs.sarif }}
+  url:
+    description: 'Where this commit can be read on cqx.bio.'
+    value: ${{ steps.scan.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install cqx
+      shell: bash
+      env:
+        CQX_VERSION: ${{ inputs.version }}
+      run: |
+        set -euo pipefail
+        # Into the runner's tool directory rather than the home directory: a
+        # job may run as a different user than the one that installed it.
+        export CQX_INSTALL_DIR="${RUNNER_TEMP}/cqx"
+        export CQX_NO_MODIFY_PATH=1
+        curl -fsSL https://cqx.bio/install | sh
+        echo "${CQX_INSTALL_DIR}/bin" >> "$GITHUB_PATH"
+
+    - name: Score
+      id: scan
+      shell: bash
+      env:
+        IN_PATH: ${{ inputs.path }}
+        IN_AGAINST: ${{ inputs.against }}
+        IN_MIN: ${{ inputs.min-score }}
+        IN_CONFIG: ${{ inputs.config }}
+        IN_SARIF: ${{ inputs.sarif }}
+        IN_SUMMARY: ${{ inputs.summary }}
+        BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        set -euo pipefail
+        out="${RUNNER_TEMP}/cqx-out"
+        mkdir -p "$out"
+
+        args=( "$IN_PATH" )
+
+        # The ratchet. On a pull request the base is the obvious thing to
+        # compare against and asking for it every time is friction, so it is
+        # the default — and `none` is how you say you meant no comparison,
+        # which an empty string cannot say.
+        against="$IN_AGAINST"
+        if [ -z "$against" ] && [ -n "${BASE_SHA:-}" ]; then
+          against="$BASE_SHA"
+        fi
+        if [ "$against" = 'none' ]; then
+          against=''
+        fi
+        if [ -n "$against" ]; then
+          # A shallow checkout does not have it. Fetching one commit is cheap
+          # and turns an obscure `git rev-parse` failure into a working check.
+          if ! git -C "$IN_PATH" rev-parse --verify --quiet "${against}^{commit}" >/dev/null; then
+            git -C "$IN_PATH" fetch --depth=1 origin "$against" >/dev/null 2>&1 || true
+          fi
+          if git -C "$IN_PATH" rev-parse --verify --quiet "${against}^{commit}" >/dev/null; then
+            args+=( --against "$against" )
+          else
+            echo "::warning::cqx could not find ${against}; scoring without a comparison. Try actions/checkout with fetch-depth: 0."
+          fi
+        fi
+
+        # Written as `if`, not `[ ... ] && ...`: under `set -e` the second
+        # form is a failing command whenever the test is false, and the step
+        # dies on the absence of an optional input.
+        if [ -n "$IN_MIN" ]; then args+=( --min-score "$IN_MIN" ); fi
+        if [ -n "$IN_CONFIG" ]; then args+=( --config "$IN_CONFIG" ); fi
+        if [ "$IN_SARIF" = 'true' ]; then
+          args+=( --sarif "${out}/cqx.sarif" )
+          echo "sarif=${out}/cqx.sarif" >> "$GITHUB_OUTPUT"
+        fi
+        if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          args+=( --summary "$GITHUB_STEP_SUMMARY" )
+        fi
+
+        # One pass. `--report` writes the JSON as well as everything else, so
+        # a second run to get the numbers would score the tree twice and
+        # could disagree with the first about what it found.
+        args+=( --report "${out}/report.json" )
+        echo "report=${out}/report.json" >> "$GITHUB_OUTPUT"
+
+        set +e
+        cqx scan "${args[@]}"
+        code=$?
+        set -e
+
+        scores=$(python3 -c "import json,sys;print(json.dumps(json.load(open('${out}/report.json'))['scores']))" 2>/dev/null || echo '{}')
+        echo "scores=${scores}" >> "$GITHUB_OUTPUT"
+        echo "passed=$([ $code -eq 0 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+        # Where to go for more than a number. The explorer addresses a commit
+        # by the first eight characters of its sha, the same way the rail does.
+        sha="${GITHUB_SHA:0:8}"
+        url="https://cqx.bio/${GITHUB_REPOSITORY}/${sha}"
+        echo "url=${url}" >> "$GITHUB_OUTPUT"
+        if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          printf '\n[Read this commit on cqx.bio](%s) — every rule, every finding, and the code it points at.\n' "$url" >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        echo "exit=${code}" >> "$GITHUB_OUTPUT"
+
+    - name: Put the findings on their lines
+      if: inputs.sarif == 'true' && inputs.upload-sarif == 'true' && hashFiles(format('{0}/cqx-out/cqx.sarif', runner.temp)) != ''
+      uses: github/codeql-action/upload-sarif@v3
+      continue-on-error: true
+      with:
+        sarif_file: ${{ runner.temp }}/cqx-out/cqx.sarif
+        category: cqx
+
+    - name: Decide
+      if: always()
+      shell: bash
+      env:
+        CODE: ${{ steps.scan.outputs.exit }}
+        SHOULD_FAIL: ${{ inputs.fail }}
+      run: |
+        set -euo pipefail
+        if [ "${CODE:-0}" = '0' ]; then
+          exit 0
+        fi
+        if [ "$SHOULD_FAIL" = 'true' ]; then
+          echo "::error::cqx refused this change. The reason is above, and on ${{ steps.scan.outputs.url }}"
+          exit 1
+        fi
+        echo '::warning::cqx would have refused this change. Reporting only, because the fail input is false.'
