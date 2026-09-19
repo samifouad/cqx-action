@@ -138,8 +138,11 @@ runs:
         if [ "$IN_SARIF" = 'true' ]; then
           args+=( --sarif "${out}/cqx.sarif" )
         fi
+        # Written to a file rather than straight to the summary, because the
+        # card belongs above it and the scores that draw the card only exist
+        # once the scan has run.
         if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-          args+=( --summary "$GITHUB_STEP_SUMMARY" )
+          args+=( --summary "${out}/summary.md" )
         fi
 
         # One pass. `--report` writes the JSON as well as everything else, so
@@ -168,8 +171,20 @@ runs:
         sha="${GITHUB_SHA:0:8}"
         url="https://cqx.bio/${GITHUB_REPOSITORY}/${sha}"
         echo "url=${url}" >> "$GITHUB_OUTPUT"
+
         if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
-          printf '\n[Read this commit on cqx.bio](%s) — every rule, every finding, and the code it points at.\n' "$url" >> "$GITHUB_STEP_SUMMARY"
+          # A job summary renders an image and nothing else — no script, no
+          # stylesheet of its own. Everything the card draws is in its
+          # address, which is what lets it work here: this commit was never
+          # published, so there is no dataset for the site to read.
+          card=$(python3 "${GITHUB_ACTION_PATH}/card.py" "${out}/report.json" "$GITHUB_REPOSITORY" 2>/dev/null || true)
+          {
+            if [ -n "$card" ]; then
+              printf '![CodeQuality Score](%s)\n\n' "$card"
+            fi
+            if [ -f "${out}/summary.md" ]; then cat "${out}/summary.md"; fi
+            printf '\n[Read this commit on cqx.bio](%s) — every rule, every finding, and the code it points at.\n' "$url"
+          } >> "$GITHUB_STEP_SUMMARY"
         fi
 
         echo "exit=${code}" >> "$GITHUB_OUTPUT"
