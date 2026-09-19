@@ -179,7 +179,7 @@ runs:
       # under RUNNER_TEMP — it returned empty, and this step silently skipped
       # on the first real run. The step that wrote the file says so instead.
       if: inputs.upload-sarif == 'true' && steps.scan.outputs.sarif != ''
-      uses: github/codeql-action/upload-sarif@v3
+      uses: github/codeql-action/upload-sarif@v4
       continue-on-error: true
       with:
         sarif_file: ${{ steps.scan.outputs.sarif }}
