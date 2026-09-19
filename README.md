@@ -26,9 +26,10 @@ direction is the part worth blocking on.
 
 ## What you get
 
-**The job summary** carries the five category scores and how each one moved,
-with a link to the commit on [cqx.bio](https://cqx.bio) for every rule, every
-finding, and the code each one points at.
+**The job summary** opens with the score drawn the way the explorer draws it —
+five dials, the band colour each one earned, and the movement under it — and
+the whole card links through to the commit on [cqx.bio](https://cqx.bio),
+where every rule, every finding and the code each points at is readable.
 
 **The findings land on their lines.** With `security-events: write` the action
 uploads SARIF, and each finding appears in the Files changed tab beside the

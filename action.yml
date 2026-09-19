@@ -177,10 +177,14 @@ runs:
           # stylesheet of its own. Everything the card draws is in its
           # address, which is what lets it work here: this commit was never
           # published, so there is no dataset for the site to read.
+          #
+          # Wrapped in a link, because an SVG served as an image is a picture
+          # and not a document: an <a> inside it would never be clicked. The
+          # markdown form is what makes the whole card clickable.
           card=$(python3 "${GITHUB_ACTION_PATH}/card.py" "${out}/report.json" "$GITHUB_REPOSITORY" 2>/dev/null || true)
           {
             if [ -n "$card" ]; then
-              printf '![CodeQuality Score](%s)\n\n' "$card"
+              printf '[![CodeQuality Score](%s)](%s)\n\n' "$card" "$url"
             fi
             if [ -f "${out}/summary.md" ]; then cat "${out}/summary.md"; fi
             printf '\n[Read this commit on cqx.bio](%s) — every rule, every finding, and the code it points at.\n' "$url"

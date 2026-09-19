@@ -32,11 +32,18 @@ def address(report: dict, repo: str | None = None) -> str:
         parts.append(f"{name}:{value}:{moved}" if moved else f"{name}:{value}")
 
     query = {"scores": ",".join(parts)}
-    if report.get("lines"):
+
+    # What the run cost, said the same way the terminal says it. `scan` is
+    # where cqx records it; older reports have only the line count at the top
+    # level, so that is the fallback rather than nothing.
+    scan = report.get("scan") or {}
+    for key in ("files", "lines", "ms"):
+        if scan.get(key):
+            query[key] = scan[key]
+    if "lines" not in query and report.get("lines"):
         query["lines"] = report["lines"]
-    version = (report.get("config") or {}).get("cqx")
-    if version:
-        query["v"] = version
+    if scan.get("cqx"):
+        query["v"] = scan["cqx"]
     against = (report.get("against") or {}).get("ref")
     if against:
         query["against"] = against[:12]
