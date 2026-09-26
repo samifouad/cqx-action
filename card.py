@@ -5,7 +5,7 @@ to sit inside a YAML block scalar is a Python block with the wrong
 indentation, and the two escaping rules cannot both be satisfied. It is also
 the only part of the action with logic worth testing on its own.
 
-    python3 card.py report.json [owner/repo] -> https://cqx.bio/card.svg?...
+    python3 card.py report.json [owner/repo] -> https://cqx.dev/card.svg?...
 
 Prints nothing and exits 0 when there is nothing to draw, so the caller can
 treat an empty line as "no card" rather than as a failure.
@@ -15,7 +15,7 @@ import json
 import sys
 import urllib.parse
 
-BASE = "https://cqx.bio/card.svg"
+BASE = "https://cqx.dev/card.svg"
 
 
 def address(report: dict, repo: str | None = None) -> str:
