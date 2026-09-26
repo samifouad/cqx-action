@@ -28,7 +28,7 @@ direction is the part worth blocking on.
 
 **The job summary** opens with the score drawn the way the explorer draws it —
 five dials, the band colour each one earned, and the movement under it — and
-the whole card links through to the commit on [cqx.bio](https://cqx.bio),
+the whole card links through to the commit on [cqx.dev](https://cqx.dev),
 where every rule, every finding and the code each points at is readable.
 
 **The findings land on their lines.** With `security-events: write` the action
@@ -62,7 +62,7 @@ business.
 | `passed` | `true` when nothing refused the change |
 | `report` | path to the whole report as JSON |
 | `sarif` | path to the SARIF file |
-| `url` | where this commit can be read on cqx.bio |
+| `url` | where this commit can be read on cqx.dev |
 
 ## Starting out
 
@@ -105,13 +105,13 @@ depend on that:
 
 ## What it installs
 
-A single static binary, from the release bucket at `releases.cqx.bio`, picked
+A single static binary, from the release bucket at `releases.cqx.dev`, picked
 for the runner it is on and verified against the checksums published beside
 it. No node, no container, no toolchain. The installer is the same one a
 person runs:
 
 ```
-curl -fsSL https://cqx.bio/install | sh
+curl -fsSL https://cqx.dev/install | sh
 ```
 
 ## Licence

@@ -69,7 +69,7 @@ outputs:
     description: 'Path to the SARIF file, when one was written.'
     value: ${{ steps.scan.outputs.sarif }}
   url:
-    description: 'Where this commit can be read on cqx.bio.'
+    description: 'Where this commit can be read on cqx.dev.'
     value: ${{ steps.scan.outputs.url }}
 
 runs:
@@ -85,7 +85,7 @@ runs:
         # job may run as a different user than the one that installed it.
         export CQX_INSTALL_DIR="${RUNNER_TEMP}/cqx"
         export CQX_NO_MODIFY_PATH=1
-        curl -fsSL https://cqx.bio/install | sh
+        curl -fsSL https://cqx.dev/install | sh
         echo "${CQX_INSTALL_DIR}/bin" >> "$GITHUB_PATH"
 
     - name: Score
@@ -169,7 +169,7 @@ runs:
         # Where to go for more than a number. The explorer addresses a commit
         # by the first eight characters of its sha, the same way the rail does.
         sha="${GITHUB_SHA:0:8}"
-        url="https://cqx.bio/${GITHUB_REPOSITORY}/${sha}"
+        url="https://cqx.dev/${GITHUB_REPOSITORY}/${sha}"
         echo "url=${url}" >> "$GITHUB_OUTPUT"
 
         if [ "$IN_SUMMARY" = 'true' ] && [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
@@ -187,7 +187,7 @@ runs:
               printf '[![CodeQuality Score](%s)](%s)\n\n' "$card" "$url"
             fi
             if [ -f "${out}/summary.md" ]; then cat "${out}/summary.md"; fi
-            printf '\n[Read this commit on cqx.bio](%s) — every rule, every finding, and the code it points at.\n' "$url"
+            printf '\n[Read this commit on cqx.dev](%s) — every rule, every finding, and the code it points at.\n' "$url"
           } >> "$GITHUB_STEP_SUMMARY"
         fi
 
